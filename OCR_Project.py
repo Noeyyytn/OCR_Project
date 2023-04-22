@@ -5,14 +5,17 @@ import numpy as np
 import matplotlib.pyplot as plt
 import streamlit as st
 import easyocr 
+import pandas as pd
+import datetime
+import os
 
 from skimage.filters import threshold_local
 from PIL import Image
 from pytesseract import Output
-import os
+
+
 
 os.environ['KMP_DUPLICATE_LIB_OK']='True'
-
 
 
 #1. Resize image (finding receipt contour is more efficient on a small image)
@@ -111,101 +114,141 @@ def find_amounts(text):
     return unique
 
 
-pytesseract.pytesseract.tesseract_cmd = r'/usr/bin/tesseract'
+pytesseract.pytesseract.tesseract_cmd = 'C:\\Users\\LT62182\\AppData\\Local\\Programs\\Tesseract-OCR\\tesseract.exe'
 # Add CSS to change the background color of the page
-
-st.title("Reciept OCR APP")
-st.text("1. Upload a Reciept image which contains English Text")
-st.text("2. Upload a Reciept image wich non complexity background colors")
 
 upload_image=st.sidebar.file_uploader('Choose an image',type=["jpg","png","jpeg"])
 
-if upload_image is not None:
-        # Read image
-        img = cv2.imdecode(np.fromstring(upload_image.read(), np.uint8), 1)
+tab1,tab2,tab3 = st.tabs(["OCR","OCR Process","Database"])
+  
+with tab2:
+    st.title("Reciept OCR APP Process")
+    st.text("1. Upload a Reciept image which contains English Text")
+    st.text("2. Upload a Reciept image wich non complexity background colors")
 
-        # Display original image
-        st.image(img, caption="1. Original Image", use_column_width=True)
+    if upload_image is not None:
+            # Read image
+            img = cv2.imdecode(np.fromstring(upload_image.read(), np.uint8), 1)
 
-        #Resize
-        Re= opencv_resize(img)
-        st.image(Re, caption="2. Resize Image", use_column_width=True)
+            # Display original image
+            st.image(img, caption="1. Original Image", use_column_width=True)
 
-        # Convert to grayscale
-        gray = To_gray(Re)
-        st.image(gray, caption="3. Grayscale Image", use_column_width=True)
+            #Resize
+            Re= opencv_resize(img)
+            st.image(Re, caption="2. Resize Image", use_column_width=True)
 
-        # Apply Gaussian Blur filter
-        blur=To_GaussianBlur(gray)
-        st.image(blur, caption="4. Blurred Image by Gaussian Blur filter", use_column_width=True)
+            # Convert to grayscale
+            gray = To_gray(Re)
+            st.image(gray, caption="3. Grayscale Image", use_column_width=True)
 
-        # Detect white regions
-        dilated= rectKernel(blur)
-        st.image(dilated, caption="5. Morphological Image for Detect white regions by Dilated medthod", use_column_width=True)
+            # Apply Gaussian Blur filter
+            blur=To_GaussianBlur(gray)
+            st.image(blur, caption="4. Blurred Image by Gaussian Blur filter", use_column_width=True)
 
-        # edge_detection
-        edged = edge_detection(dilated)
-        st.image(edged, caption="6. Edge detection Image", use_column_width=True)
-        
-        # Detect all contours
-        contours, hierarchy = cv2.findContours(edged, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-        image_with_contours = cv2.drawContours(Re.copy(), contours, -1, (0,255,0), 3)
-        st.image(image_with_contours, caption="7. Image with all contours", use_column_width=True)
+            # Detect white regions
+            dilated= rectKernel(blur)
+            st.image(dilated, caption="5. Morphological Image for Detect white regions by Dilated medthod", use_column_width=True)
 
-        # Detect max 10 contours
-        largest_contours = sorted(contours, key = cv2.contourArea, reverse = True)[:10]
-        image_with_largest_contours = cv2.drawContours(Re.copy(), largest_contours, -1, (0,255,0), 3)
-        st.image(image_with_largest_contours, caption="8. Image with 10 largest contours", use_column_width=True)
-        
-        # Detect squred
-        get_receipt_contour(largest_contours)
-        receipt_contour = get_receipt_contour(largest_contours)
-        image_with_receipt_contour = cv2.drawContours(Re.copy(), [receipt_contour], -1, (0, 255, 0), 2)
-        st.image(image_with_receipt_contour, caption="9. Reciept contours Image", use_column_width=True)
+            # edge_detection
+            edged = edge_detection(dilated)
+            st.image(edged, caption="6. Edge detection Image", use_column_width=True)
+            
+            # Detect all contours
+            contours, hierarchy = cv2.findContours(edged, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+            image_with_contours = cv2.drawContours(Re.copy(), contours, -1, (0,255,0), 3)
+            st.image(image_with_contours, caption="7. Image with all contours", use_column_width=True)
 
-        # Cropping
-        cropping = wrap_perspective(img.copy(), contour_to_rect(receipt_contour))
-        st.image(cropping , caption="10. Cropping Image", use_column_width=True)
+            # Detect max 10 contours
+            largest_contours = sorted(contours, key = cv2.contourArea, reverse = True)[:10]
+            image_with_largest_contours = cv2.drawContours(Re.copy(), largest_contours, -1, (0,255,0), 3)
+            st.image(image_with_largest_contours, caption="8. Image with 10 largest contours", use_column_width=True)
+            
+            # Detect squred
+            get_receipt_contour(largest_contours)
+            receipt_contour = get_receipt_contour(largest_contours)
+            image_with_receipt_contour = cv2.drawContours(Re.copy(), [receipt_contour], -1, (0, 255, 0), 2)
+            st.image(image_with_receipt_contour, caption="9. Reciept contours Image", use_column_width=True)
 
-        #Equaliazation
-        #equalized = hist_equalization(cropping)
-        #t.image(equalized, caption="Equaliazation Image", use_column_width=True)
+            # Cropping
+            cropping = wrap_perspective(img.copy(), contour_to_rect(receipt_contour))
+            st.image(cropping , caption="10. Cropping Image", use_column_width=True)
 
-        #Scanner
-        result = bw_scanner(cropping)
-        st.image(result , caption="11. Scanned Image", use_column_width=True)
+            #Equaliazation
+            #equalized = hist_equalization(cropping)
+            #t.image(equalized, caption="Equaliazation Image", use_column_width=True)
 
-        #Box 
-        d = pytesseract.image_to_data(result, output_type=Output.DICT)
-        n_boxes = len(d['level'])
-        boxes = cv2.cvtColor(result.copy(), cv2.COLOR_BGR2RGB)
-        for i in range(n_boxes):
-            (x, y, w, h) = (d['left'][i], d['top'][i], d['width'][i], d['height'][i])    
-            boxes = cv2.rectangle(boxes, (x, y), (x + w, y + h), (0, 255, 0), 2)
-        st.image(boxes , caption="12. Box Image", use_column_width=True)
+            #Scanner
+            result = bw_scanner(cropping)
+            st.image(result , caption="11. Scanned Image", use_column_width=True)
 
-    
+            #Box 
+            d = pytesseract.image_to_data(result, output_type=Output.DICT)
+            n_boxes = len(d['level'])
+            boxes = cv2.cvtColor(result.copy(), cv2.COLOR_BGR2RGB)
+            for i in range(n_boxes):
+                (x, y, w, h) = (d['left'][i], d['top'][i], d['width'][i], d['height'][i])    
+                boxes = cv2.rectangle(boxes, (x, y), (x + w, y + h), (0, 255, 0), 2)
+            st.image(boxes , caption="12. Box Image", use_column_width=True)
 
-        if st.button("Extract Text"):
 
+            #if st.button("Extract Text"):
             st.write("---------------------Extracted Text From Reciept By Pytesseract----------------------------")
             output_text=pytesseract.image_to_string(result)
             value = output_text.replace(',', '')
             value1 = value.replace('THB', ' ')
-            #value2 = value1.replace('TOTAL', ' ')
+                #value2 = value1.replace('TOTAL', ' ')
             st.write(value1)
             amounts = find_amounts(value1)
 
             st.write("---------------------Extracted Amount From Text By Regular expression----------------------------")
             st.text("Amount of this reciept is :")
             st.write(max(amounts))
-            #st.write(f"Amount of this receipt is: {max(amounts)}")
+                #st.write(f"Amount of this receipt is: {max(amounts)}")
             st.write("------------------------------------------------------------------------------")
 
-            #st.write("---------------------Extracted Text From Reciept By P----------------------------")
-            #output_text1=pytesseract.image_to_string(cropping) 
-            #amount = re.search(r'\d{1,3}(,\d{3})*\.\d{2}', output_text1).group() 
-            #st.write(amount)
+                #st.write("---------------------Extracted Text From Reciept By P----------------------------")
+                #output_text1=pytesseract.image_to_string(cropping) 
+                #amount = re.search(r'\d{1,3}(,\d{3})*\.\d{2}', output_text1).group() 
+                #st.write(amount)
+
+with tab1:
+    st.title("Information")
+    st.text("1. Browse receipt image")
+    st.text("2. Input your Name ")
+    st.text("3. Select your Department Name")
+    st.text("4. Input Date in reciept")
+    st.text("5. Submit Information")
+
+    st.text_input("Name")
+
+    option = st.selectbox(
+        'Department Name',
+        ('Select','D1', 'D2', 'D3'))
+    
+    d = st.date_input(
+        "Date in reciept",
+        datetime.date(2023, 4, 23))
+     
+    if upload_image is not None:
+        st.image(img, caption="Your Receipt Image", use_column_width=True)
+        st.write("---------------------Extracted Amount From Receipt----------------------------")
+        st.text("Amount of this reciept is :")
+        New_Amount = st.text_input("Amount of this reciept is :",max(amounts))
+        st.write("------------------------------------------------------------------------------")
+
+        #DB Mapping
+        if st.button("Submit Information") : 
+            st.write("connect DB")
+
+with tab3:
+    @st.cache_data
+    def load_data(sheets_url):
+        csv_url = sheets_url.replace("/edit#gid=", "/export?format=csv&gid=")
+        return pd.read_csv(csv_url)
+
+    df = load_data(st.secrets["public_gsheets_url"])
+    # Print results.
+    st.dataframe(df)
 
 
 

@@ -114,7 +114,7 @@ def find_amounts(text):
     return unique
 
 
-pytesseract.pytesseract.tesseract_cmd = 'C:\\Users\\LT62182\\AppData\\Local\\Programs\\Tesseract-OCR\\tesseract.exe'
+pytesseract.pytesseract.tesseract_cmd = r'/usr/bin/tesseract'
 # Add CSS to change the background color of the page
 
 upload_image=st.sidebar.file_uploader('Choose an image',type=["jpg","png","jpeg"])

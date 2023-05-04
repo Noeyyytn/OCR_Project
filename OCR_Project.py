@@ -13,6 +13,25 @@ from skimage.filters import threshold_local
 from PIL import Image
 from pytesseract import Output
 
+#Google Sheet
+from gspread_pandas import Spread,Client
+from google.oauth2 import service_account
+from gsheetsdb import connect
+import gspread
+from gspread_dataframe import set_with_dataframe
+
+# Create a Google Authentication connection object
+
+scope = ['https://spreadsheets.google.com/feeds','https://www.googleapis.com/auth/drive']
+credentials = service_account.Credentials.from_service_account_info(
+    st.secrets["gcp_service_account"], scopes = scope)
+
+client = Client(scope=scope,creds=credentials)
+spreadsheetname = "OCR_Data"
+spread = Spread(spreadsheetname,client = client)
+conn = connect(credentials=credentials)
+sh = client.open("OCR_Data").worksheet("OCR_Data_sheet")
+
 
 
 os.environ['KMP_DUPLICATE_LIB_OK']='True'
@@ -113,18 +132,34 @@ def find_amounts(text):
     unique = list(dict.fromkeys(floats))
     return unique
 
+# 10. Load spread sheet
+def load_data(url, sheet_name="OCR_Data_sheet"):
+    sh = client.open_by_url(url)
+    df = pd.DataFrame(sh.worksheet(sheet_name).get_all_records())
+    return df
 
-pytesseract.pytesseract.tesseract_cmd = r'/usr/bin/tesseract'
+import math
+def max_amount(amounts):
+    Max_amount=max(amounts)
+    Decimal=math.trunc(Max_amount * 100) / 100
+    formatted_num = "{:.2f}".format(Decimal)
+
+    return formatted_num
+
+                
+
+pytesseract.pytesseract.tesseract_cmd = 'C:\\Users\\LT62182\\AppData\\Local\\Programs\\Tesseract-OCR\\tesseract.exe'
 # Add CSS to change the background color of the page
 
 upload_image=st.sidebar.file_uploader('Choose an image',type=["jpg","png","jpeg"])
 
+
 tab1,tab2,tab3 = st.tabs(["OCR","OCR Process","Database"])
   
 with tab2:
-    st.title("Reciept OCR APP Process")
-    st.text("1. Upload a Reciept image which contains English Text")
-    st.text("2. Upload a Reciept image wich non complexity background colors")
+    st.title("Receipt OCR APP Process")
+    st.text("1. Upload a Receipt image which contains English Text")
+    st.text("2. Upload a Receipt image wich non complexity background colors")
 
     if upload_image is not None:
             # Read image
@@ -167,7 +202,7 @@ with tab2:
             get_receipt_contour(largest_contours)
             receipt_contour = get_receipt_contour(largest_contours)
             image_with_receipt_contour = cv2.drawContours(Re.copy(), [receipt_contour], -1, (0, 255, 0), 2)
-            st.image(image_with_receipt_contour, caption="9. Reciept contours Image", use_column_width=True)
+            st.image(image_with_receipt_contour, caption="9. Receipt contours Image", use_column_width=True)
 
             # Cropping
             cropping = wrap_perspective(img.copy(), contour_to_rect(receipt_contour))
@@ -192,21 +227,23 @@ with tab2:
 
 
             #if st.button("Extract Text"):
-            st.write("---------------------Extracted Text From Reciept By Pytesseract----------------------------")
+            st.write("---------------------Extracted Text From Receipt By Pytesseract----------------------------")
             output_text=pytesseract.image_to_string(result)
             value = output_text.replace(',', '')
             value1 = value.replace('THB', ' ')
                 #value2 = value1.replace('TOTAL', ' ')
             st.write(value1)
             amounts = find_amounts(value1)
+            Max_amount = max_amount(amounts)
+
 
             st.write("---------------------Extracted Amount From Text By Regular expression----------------------------")
-            st.text("Amount of this reciept is :")
-            st.write(max(amounts))
-                #st.write(f"Amount of this receipt is: {max(amounts)}")
+            st.text("Amount of this receipt is :")
+            st.write(Max_amount)
+
             st.write("------------------------------------------------------------------------------")
 
-                #st.write("---------------------Extracted Text From Reciept By P----------------------------")
+                #st.write("---------------------Extracted Text From Receipt By P----------------------------")
                 #output_text1=pytesseract.image_to_string(cropping) 
                 #amount = re.search(r'\d{1,3}(,\d{3})*\.\d{2}', output_text1).group() 
                 #st.write(amount)
@@ -216,39 +253,75 @@ with tab1:
     st.text("1. Browse receipt image")
     st.text("2. Input your Name ")
     st.text("3. Select your Department Name")
-    st.text("4. Input Date in reciept")
+    st.text("4. Input Date in receipt")
     st.text("5. Submit Information")
 
-    st.text_input("Name")
 
-    option = st.selectbox(
+    #Input Data
+    Name_Input= st.text_input("Name")
+
+    Option = st.selectbox(
         'Department Name',
-        ('Select','D1', 'D2', 'D3'))
+        ('Select','BD','IT', 'HR', 'PC', 'AC', 'AE', 'SH', 'MT','CS'))
     
-    d = st.date_input(
-        "Date in reciept",
-        datetime.date(2023, 4, 23))
-     
+    RecipetDate = st.date_input(
+        "Date in receipt",
+        datetime.date(2023, 4, 23)
+        )
+    Bank_Accout = st.selectbox(
+        'Bank Accout',
+        ('Select','Prompay','BBL', 'KBANK', 'KTB', 'SCB', 'BAY', 'TMB', 'TBANK', 'CIMBT', 'LHB', 'BAAC', 'GSB'))
+    
+    Account_Number= st.text_input("Account Number")
+
+    Now = datetime.datetime.now()
+
+
     if upload_image is not None:
+
         st.image(img, caption="Your Receipt Image", use_column_width=True)
         st.write("---------------------Extracted Amount From Receipt----------------------------")
-        st.text("Amount of this reciept is :")
-        New_Amount = st.text_input("Amount of this reciept is :",max(amounts))
+        st.text("Amount of this receipt is :")
+        OCR_Amount = Max_amount
+        New_Amount = st.text_input("Amount of this receipt is :",Max_amount)
+        New_Amount_float= float(New_Amount)
+        New_OCR_amount = float(OCR_Amount)
         st.write("------------------------------------------------------------------------------")
 
         #DB Mapping
         if st.button("Submit Information") : 
-            st.write("connect DB")
+
+            difference = New_Amount_float- New_OCR_amount
+            absolute_difference = abs(difference)
+            #f'Difference: {absolute_difference:.2f}'
+
+            Data={'Name' : [Name_Input],
+            'Department Name' : [Option],
+            'Date in receipt' : [RecipetDate],
+            'Bank Account' : [Bank_Accout],
+            'Account Number': [Account_Number],
+            'Receipt Amount' :[New_Amount],
+            'OCR Amount' : [OCR_Amount],
+            'Differrence' : [absolute_difference],
+            'Create Date' : [Now]  
+            }
+
+            from builtins import abs
+
+            Data_df= pd.DataFrame(Data)
+            df = load_data(spread.url)
+            #NewData_df= df.append(Data_df, ignore_index= True)
+
+            NewData_df = pd.concat([df,Data_df], ignore_index=True)
+
+
+            set_with_dataframe(sh,NewData_df)
 
 with tab3:
-    @st.cache_data
-    def load_data(sheets_url):
-        csv_url = sheets_url.replace("/edit#gid=", "/export?format=csv&gid=")
-        return pd.read_csv(csv_url)
-
-    df = load_data(st.secrets["public_gsheets_url"])
+    df = load_data(spread.url)
     # Print results.
-    st.dataframe(df)
+    st.write(spread.url)
+    st.write(df)
 
 
 
